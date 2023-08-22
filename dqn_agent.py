@@ -25,7 +25,7 @@ class DQNAgent:
         	self.model = self._build_model()
         else:
         	self.model = load_model(model_name, compile = False)
-        	self.model.compile(optimizer=Adam(lr=self.learning_rate), loss='mse', clipnorm=1.0)
+        	self.model.compile(optimizer=Adam(lr=self.learning_rate, clipnorm=1.0), loss='mse')
 
     def _build_model(self):
         model = Sequential()
@@ -37,7 +37,7 @@ class DQNAgent:
         model.add(Dropout(0.2))
         model.add(Flatten())
         model.add(Dense(self.action_size, activation='linear'))
-        model.compile(optimizer=Adam(lr=self.learning_rate), loss='mse', clipnorm=1.0)
+        model.compile(optimizer=Adam(lr=self.learning_rate, clipnorm=1.0), loss='mse')
         return model
 
     def remember(self, state, action, reward, next_state, done, n_rewards):

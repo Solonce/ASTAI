@@ -85,8 +85,8 @@ if __name__ == "__main__":
         f = open('iteration_data.json')
         data = json.load(f)
         agent = DQNAgent(3, window_size, is_model=True, current_iter=data['current_pair'], current_step=data['step'], model_name=model_name, loss=float(data['loss_avg']))
-        agent.current_pair = data['current_pair']
-        sorted_pairs = list(price_data.keys())[agent.current_pair:]
+        agent.current_iter = data['current_pair']
+        sorted_pairs = list(price_data.keys())[agent.current_iter:]
 
     for i, pair in enumerate(sorted_pairs):
         stock_price_data_np = price_data[pair]
@@ -111,7 +111,6 @@ if __name__ == "__main__":
                 [agent.remember(state, action, reward, next_state, done, n_reward) for state, action, reward, next_state, done, n_reward in zip(states, actions, rewards, next_states, dones, [info['n_rewards'] for info in infos])]
                 states = next_states
                 agent.step = infos[0]['step']
-                agent.current_pair = i
                 [print(f"episode: {e}/{episodes}, action: {action}, reward: {np.round(reward, 2)}, net reward: {np.round(info['net reward'], 2)} score: {agent.step}, e: {agent.epsilon}, done: {done}, open orders: {info['orders']}") for action, done, reward, info in zip(actions, dones, rewards, infos)]
                 if True in dones or agent.step>=(len(stock_price_data_np)-window_size):
                     update_iteration_data({"step": 0, "current_pair": agent.current_iter, "Net Rewards": [info['net reward'] for info in infos], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg)})
