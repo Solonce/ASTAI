@@ -35,7 +35,7 @@ class DQNAgent:
         model.add(Dropout(0.2))
         model.add(GRU(512, dynamic=True))
         model.add(Dropout(0.2))
-        model.add(Flatten())
+        model.add(Flatten(input_shape=(self.window_size, 5)))
         model.add(Dense(self.action_size, activation='linear'))
         model.compile(optimizer=Adam(lr=self.learning_rate, clipnorm=1.0), loss='mse')
         return model
