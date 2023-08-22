@@ -24,8 +24,9 @@ class DQNAgent:
         if not is_model:
         	self.model = self._build_model()
         else:
-        	self.model = load_model(model_name, compile = False)
-        	self.model.compile(optimizer=Adam(lr=self.learning_rate, clipnorm=1.0), loss='mse')
+            self.model = self._build_model()
+            self.model.load_weights(model_name)
+            self.model.compile(optimizer=Adam(lr=self.learning_rate, clipnorm=1.0), loss='mse')
 
     def _build_model(self):
         model = Sequential()
@@ -80,4 +81,4 @@ class DQNAgent:
             self.epsilon *= self.epsilon_decay
 
     def save_model(self, model_name):
-    	self.model.save(model_name)
+    	self.model.save_weights(model_name)
