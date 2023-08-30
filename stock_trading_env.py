@@ -57,6 +57,7 @@ class StockTradingEnv(gym.Env):
                 reward += order_percent
                 if forward_index == -1:
                     self.orders = np.delete(self.orders, np.where(self.orders==order)[0][0])
+                    return reward
             else:
                 life = order.life_counter
                 if life+forward_index >= self.max_order_length and forward_index != -1:
@@ -82,7 +83,6 @@ class StockTradingEnv(gym.Env):
             if action == [2]:
                 _type = "sell"
             self.orders = np.append(self.orders, trade_order(_type, current_price[0]))
-            
 
         reward = self.get_reward(current_price)
 
