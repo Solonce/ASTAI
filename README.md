@@ -33,6 +33,9 @@ Here you can see some basic output from the script.
 
 
 ## Suncreenshot 2
+Here you can see the output and formatting of ```iteration_data.json```.
+
+![image](https://github.com/Solonce/ASTAI/assets/53124218/332714a6-4b36-4461-8ab4-24f2c409cc7c)
 
 ## Screenshot 3
 
