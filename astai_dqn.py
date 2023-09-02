@@ -26,12 +26,10 @@ from gym.utils import seeding
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 def make_env(rank, data, window_size, seed=1, current_step=0):
-    def _init():
-    	env = StockTradingEnv(data, window_size, current_step=current_step)
-    	env.seed(seed+rank)
-    	env = Monitor(env)
-    	return env
-    return _init
+    env = StockTradingEnv(data, window_size, current_step=current_step)
+    env.seed(seed+rank)
+    #env = Monitor(env)
+    return env
 
 def map_values(x, _min, _max):
     return (x - _min) / (_max - _min)
@@ -102,33 +100,34 @@ if __name__ == "__main__":
     for i, pair in enumerate(sorted_pairs):
         stock_price_data_np = price_data[pair]
 
-        num_processes = 2
+        num_processes = 1
         if not os.path.isfile(model_name):
         	print("No model found")
-        	envs = SubprocVecEnv([make_env(i, stock_price_data_np, window_size) for i in range(num_processes)])
+        	envs = make_env(i, stock_price_data_np, window_size)
         else:
         	print("Model Found")
-        	envs = SubprocVecEnv([make_env(i, stock_price_data_np, window_size, current_step=agent.step) for i in range(num_processes)])	
+        	envs = make_env(i, stock_price_data_np, window_size, current_step=agent.step)
         print("Loaded Subprocesses")
         episodes = 10
         batch_size = 32
 
         for e in range(episodes):
-            states = envs.reset()
+            state = envs.reset()
             for time in range(1000):
-                states = [state[time:window_size+(time)] for state in states]
-                actions = [agent.act(state) for state in states]
-                next_states, rewards, dones, infos = envs.step(actions)
-                [agent.remember(state, action, reward, done, n_reward) for state, action, reward, done, n_reward in zip(states, actions, rewards, dones, [info['n_rewards'] for info in infos])]
-                states = next_states
-                agent.step = infos[0]['step']
+                gc.collect()
+                state = np.array(state[time:window_size+(time)])
+                action = agent.act(state)
+                next_state, reward, done, _, info = envs.step(action)
+                agent.remember(state, action, reward, done, info['n_rewards'])
+                state = next_state
+                agent.step = info['step']
                 agent.current_pair = i
-                [print(f"episode: {e}/{episodes}, action: {action}, reward: {np.round(reward, 2)}, net reward: {np.round(info['net reward'], 2)} score: {agent.step}, e: {agent.epsilon}, done: {done}, open orders: {info['orders']}") for action, done, reward, info in zip(actions, dones, rewards, infos)]
-                if True in dones or agent.step>=(len(stock_price_data_np)-window_size):
-                    update_iteration_data({"step": 0, "current_pair": agent.current_iter, "Net Rewards": [info['net reward'] for info in infos], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate": str(agent.learning_rate)})
+                print(f"episode: {e}/{episodes}, action: {action}, reward: {np.round(reward, 2)}, net reward: {np.round(info['net reward'], 2)} score: {agent.step}, e: {agent.epsilon}, done: {done}, open orders: {info['orders']}")
+                if done is True or agent.step>=(len(stock_price_data_np)-window_size):
+                    update_iteration_data({"step": 0, "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate": str(agent.learning_rate)})
                     break
                 else:
-                    update_iteration_data({"step": infos[0]['step'], "current_pair": agent.current_iter, "Net Rewards": [info['net reward'] for info in infos], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate":str(agent.learning_rate)})
+                    update_iteration_data({"step": info['step'], "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate":str(agent.learning_rate)})
 
                 if len(agent.memory) > batch_size:
                     agent.replay(batch_size)

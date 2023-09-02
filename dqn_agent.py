@@ -11,7 +11,7 @@ import random
 class DQNAgent:
     def __init__(self, action_size, window_size, is_model=False, current_iter = 0, current_step=0, model_name="", loss=0, epsilon=1.0, learning_rate=0.001):
         self.action_size = action_size
-        self.memory = deque(maxlen=33)
+        self.memory = deque(maxlen=100)
         self.window_size = window_size
         self.gamma = 0.95
         self.epsilon = epsilon
@@ -27,7 +27,6 @@ class DQNAgent:
             self.model = self._build_model()
         else:
             self._load_model(model_name)
-            self.model.save(model_name)
 
     def _load_model(self, model_name):
         self.model = load_model(model_name)
@@ -35,13 +34,12 @@ class DQNAgent:
 
     def _build_model(self):
         model = Sequential()
-        model.add(GRU(128, input_shape=(self.window_size, 5), return_sequences=True, name="gru_1", dynamic=True))
+        model.add(GRU(128, input_shape=(self.window_size, 5), return_sequences=True, name="gru_1"))
         model.add(Dropout(0.2))
-        model.add(GRU(256, return_sequences=True, name="gru_2", dynamic=True))
+        model.add(GRU(256, return_sequences=True, name="gru_2"))
         model.add(Dropout(0.2))
-        model.add(GRU(512, name="gru_3", dynamic=True))
+        model.add(GRU(512, name="gru_3"))
         model.add(Dropout(0.2))
-        model.add(Flatten(input_shape=(self.window_size, 5)))
         model.add(Dense(self.action_size, activation='linear'))
         model.compile(optimizer=Adam(learning_rate=self.learning_rate, clipnorm=1.0), loss='mse', run_eagerly=True)
         return model
@@ -80,7 +78,7 @@ class DQNAgent:
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
         self.loss_avg = (self.loss_avg+(sum(loss_arr)/len(loss_arr)))/2
-        print(self.loss_avg)
+        print(f"Average Loss For Minibatch Iteration: {self.loss_avg}")
 
     def save_model(self, model_name):
     	self.model.save(model_name)
