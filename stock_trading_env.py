@@ -92,8 +92,15 @@ class StockTradingEnv(gym.Env):
 
         if action == [0]:
             future_price = self.stock_prices[self.current_step+n]
+            if future_price[0] == 0.0:
+                future_price[0] = current_price[0]
+
             order_percent = ((future_price[0]-current_price[0])/future_price[0])*100
-            reward += self.scaled_sigmoid(3, order_percent)
+            if order_percent >= 1:
+                print(f"Order percent change higher than 1: {order_percent}")
+                reward += -3 * (1-self.scaled_sigmoid(3, order_percent))
+            else:
+                reward += self.scaled_sigmoid(3, order_percent)
 
         for i in range(n):
             n_rewards.append(self.get_reward(self.stock_prices[self.current_step+i+1], forward_index=i))

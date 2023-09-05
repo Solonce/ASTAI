@@ -110,7 +110,7 @@ if __name__ == "__main__":
         print("Loaded Subprocesses")
         episodes = 10
         batch_size = 32
-        kill_size = 100
+        kill_size = 150
 
         for e in range(episodes):
             state = envs.reset()
@@ -123,7 +123,7 @@ if __name__ == "__main__":
                 state = next_state
                 agent.step = info['step']
                 agent.current_pair = i
-                print(f"time_step: {time}, episode: {e}/{episodes}, action: {action}, reward: {np.round(reward, 2)}, net reward: {np.round(info['net reward'], 2)} score: {agent.step}, e: {agent.epsilon}, done: {done}, open orders: {info['orders']}")
+                print(f"episode: {e}/{episodes}, action: {action}, reward: {np.round(reward, 2)}, net reward: {np.round(info['net reward'], 2)} score: {agent.step}, e: {agent.epsilon}, done: {done}, open orders: {info['orders']}")
                 if done is True or agent.step>=(len(stock_price_data_np)-window_size):
                     update_iteration_data({"step": 0, "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate": str(agent.learning_rate)})
                     kill_size = kill_size - time
@@ -134,7 +134,7 @@ if __name__ == "__main__":
                 if len(agent.memory) > batch_size:
                     agent.replay(batch_size)
                 agent.save_model(model_name)
-                if time >= kill_size:
+                if time == kill_size:
                     quit()
 
         agent.current_iter += 1
