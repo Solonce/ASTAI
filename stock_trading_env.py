@@ -31,6 +31,13 @@ class StockTradingEnv(gym.Env):
         scaled_x = 10 * (abs(i) / n) - 5
         return 1 / (1 + np.exp(-scaled_x))
 
+    def piecewise(self, p, theta, _max):
+        if abs(p) <= theta:
+            return 3*(1-self.scaled_sigmoid(theta, p))
+        elif abs(p) > theta:
+            return -3*(self.scaled_sigmoid(_max, p))
+
+
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
@@ -62,7 +69,7 @@ class StockTradingEnv(gym.Env):
                 life = order.life_counter
                 if life+forward_index >= self.max_order_length and forward_index != -1:
                     life = self.max_order_length
-                reward += (order_percent * order.scaled_sigmoid(self.max_order_length, order.life_counter))
+                reward += (order_percent * (1-order.scaled_sigmoid(self.max_order_length, order.life_counter)))
             if forward_index == -1:
                 order.life_counter = order.life_counter + 1
         return reward
@@ -96,18 +103,13 @@ class StockTradingEnv(gym.Env):
                 future_price[0] = current_price[0]
 
             order_percent = ((future_price[0]-current_price[0])/future_price[0])*100
-            if order_percent >= 1:
-                print(f"Order percent change higher than 1: {order_percent}")
-                reward += -3 * (1-self.scaled_sigmoid(3, order_percent))
-            else:
-                reward += self.scaled_sigmoid(3, order_percent)
+            reward += self.piecewise(order_percent, 1, 3)
 
         for i in range(n):
             n_rewards.append(self.get_reward(self.stock_prices[self.current_step+i+1], forward_index=i))
 
         self.net_reward += reward
         self.reset_info = {"net reward": self.net_reward, "orders": self.orders.size, "step": self.current_step, "n_rewards": n_rewards}
-        
 
 
         return self.stock_prices, reward, self.done, False, self.reset_info

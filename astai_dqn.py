@@ -90,12 +90,14 @@ if __name__ == "__main__":
     if not os.path.isfile(model_name):
         agent = DQNAgent(3, window_size)
         sorted_pairs = list(price_data.keys())
+        episode_start = 0
     else:
         f = open('iteration_data.json')
         data = json.load(f)
         agent = DQNAgent(3, window_size, is_model=True, current_iter=data['current_pair'], current_step=data['step'], model_name=model_name, loss=float(data['loss_avg']), epsilon=float(data['epsilon']), learning_rate=float(data['learning_rate']))
         agent.current_pair = data['current_pair']
         sorted_pairs = list(price_data.keys())[agent.current_pair:]
+        episode_start = int(data['episode'])
     print("Loaded Agent")
     for i, pair in enumerate(sorted_pairs):
         stock_price_data_np = price_data[pair]
@@ -112,7 +114,7 @@ if __name__ == "__main__":
         batch_size = 32
         kill_size = 100
 
-        for e in range(episodes):
+        for e in range(episode_start, episodes):
             state = envs.reset()
             for time in range(1000):
                 gc.collect()
@@ -125,11 +127,11 @@ if __name__ == "__main__":
                 agent.current_pair = i
                 print(f"time_step: {time}, episode: {e}/{episodes}, action: {action}, reward: {np.round(reward, 2)}, net reward: {np.round(info['net reward'], 2)} score: {agent.step}, e: {agent.epsilon}, done: {done}, open orders: {info['orders']}")
                 if done is True or agent.step>=(len(stock_price_data_np)-window_size):
-                    update_iteration_data({"step": 0, "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate": str(agent.learning_rate)})
+                    update_iteration_data({"episode": str(e), "step": 0, "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate": str(agent.learning_rate)})
                     kill_size = kill_size - time
                     break
                 else:
-                    update_iteration_data({"step": info['step'], "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate":str(agent.learning_rate)})
+                    update_iteration_data({"episode": str(e), "step": info['step'], "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate":str(agent.learning_rate)})
 
                 if len(agent.memory) > batch_size:
                     agent.replay(batch_size)

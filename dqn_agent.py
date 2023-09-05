@@ -52,7 +52,7 @@ class DQNAgent:
         if np.random.rand() <= self.epsilon and prediction==False:
             act_values = [random.randrange(self.action_size)]
         else:
-            prediction = self.model.predict(state)
+            prediction = self.model.predict(state, verbose=0)
             act_values = [np.argmax(prediction)]
         return act_values
 
@@ -61,9 +61,10 @@ class DQNAgent:
         loss_arr = []
         print("Running Minibatch")
         for i, (state, action, reward, done, n_rewards) in enumerate(minibatch):
+            print(f"\rMinibatch Iteration: {i}", end="", flush=True)
             state[np.isnan(state)] = 0
             state = np.expand_dims(state, axis=0)
-            predictions = self.model.predict(state)
+            predictions = self.model.predict(state, verbose=0)
             target = sum([self.gamma**k * rew for k, rew in enumerate(n_rewards)])
 
             if not done:
@@ -78,7 +79,7 @@ class DQNAgent:
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
         self.loss_avg = (self.loss_avg+(sum(loss_arr)/len(loss_arr)))/2
-        print(f"Average Loss For Minibatch Iteration: {self.loss_avg}")
+        print(f"\nAverage Loss For Minibatch Iteration: {self.loss_avg}")
 
     def save_model(self, model_name):
     	self.model.save(model_name)
