@@ -22,7 +22,11 @@ import tracemalloc
 import gym
 from gym import spaces
 from gym.utils import seeding
+import multiprocessing
+import torch
+from collections import deque
 
+torch.set_num_threads(1)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 def make_env(rank, data, window_size, seed=1, current_step=0):
@@ -75,6 +79,60 @@ def update_iteration_data(data):
     with open("iteration_data.json", "w") as outfile:
         json.dump(data, outfile, indent = 4)
 
+'''
+0 - np.array
+1 - list
+2 - np.float64
+3 - bool
+4 - list
+'''
+
+def write_memories(mem):
+     memory_dictionary = {'memories': mem}
+     for _, memories in memory_dictionary.items():
+         for mem_index, memory in enumerate(memories):
+             for i, _memory in enumerate(memory):
+                 if type(_memory) == type(np.array([])):
+                     memory_dictionary[_][mem_index][0] = list(_memory)
+                     for entry_index, entry in enumerate(memory_dictionary[_][mem_index][0]):
+                         #print(memory_dictionary[_][mem_index][0])
+                         memory_dictionary[_][mem_index][0][entry_index] = memory_dictionary[_][mem_index][0][entry_index].tolist()
+                         #print(type(memory_dictionary[_][mem_index][0][entry_index]))
+                 elif type(_memory) == type([]) and i != 0:
+                     for entry_index, entry in enumerate(memory_dictionary[_][mem_index][i]):
+                         #print(entry, i, type(entry))
+                         memory_dictionary[_][mem_index][i][entry_index] = float(_memory[entry_index])
+
+     with open("memory.json", "w") as outfile:
+        json.dump(memory_dictionary, outfile, indent = 4)
+     print("\nMemory written to JSON.")
+
+def read_memories():
+     f = open('memory.json')
+     memory_dictionary = json.load(f)
+     _data = deque(maxlen=100)
+     for _, memories in memory_dictionary.items():
+         for mem_index, memory in enumerate(memories):
+             for i, _memory in enumerate(memory):
+                 memory_dictionary[_][mem_index][0] = np.array(memory_dictionary[_][mem_index][0])
+                 memory_dictionary[_][mem_index][2] = [np.float64(memory_dictionary[_][mem_index][2])]
+                 if type(memory_dictionary[_][mem_index][i]) == type([]):
+                     for entry_index, entry in enumerate(memory_dictionary[_][mem_index][i]):
+                         if i == 0:
+                             memory_dictionary[_][mem_index][i][entry_index] = np.array(entry)
+                         elif i == 2:
+                             memory_dictionary[_][mem_index][i][entry_index] = np.int64(entry[entry_index])
+                         #elif i == 4:
+                             #memory_dictionary[_][mem_index][i][entry_index] = np.float64(entry[entry_index])
+
+             try:
+                 memory_dictionary[_][mem_index] = tuple(memory)
+             except:
+                 print("empty memory")
+             _data.append(memory_dictionary[_][mem_index])
+     print("Memories Applied.")
+     return _data
+
 # Main loop
 if __name__ == "__main__":
     print("Started")
@@ -95,6 +153,7 @@ if __name__ == "__main__":
         f = open('iteration_data.json')
         data = json.load(f)
         agent = DQNAgent(3, window_size, is_model=True, current_iter=data['current_pair'], current_step=data['step'], model_name=model_name, loss=float(data['loss_avg']), epsilon=float(data['epsilon']), learning_rate=float(data['learning_rate']))
+        [agent.memory.append(memory) for memory in read_memories()]
         agent.current_pair = data['current_pair']
         sorted_pairs = list(price_data.keys())[agent.current_pair:]
         episode_start = int(data['episode'])
@@ -134,8 +193,12 @@ if __name__ == "__main__":
                     update_iteration_data({"episode": str(e), "step": info['step'], "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate":str(agent.learning_rate)})
 
                 if len(agent.memory) > batch_size:
-                    agent.replay(batch_size)
+                    minibatch = random.sample(agent.memory, batch_size)
+                    for i, mini in enumerate(minibatch):
+                        agent.replay(i, mini)
+
                 agent.save_model(model_name)
+                write_memories([list(memory) for memory in agent.memory])
                 if time >= kill_size:
                     quit()
 

@@ -14,7 +14,9 @@ class trade_order():
 		return 1 / (1 + np.exp(-scaled_x))
 
 	def get_percent_change(self, current_price):
-		return ((current_price-self.entry_price)/current_price)*100
+            if current_price == 0:
+                return 0
+            return ((current_price-self.entry_price)/current_price)*100
 
 	def check_change(self, current_price):
 		percent_diff = self.get_percent_change(current_price)

@@ -6,6 +6,7 @@ from collections import deque
 import tensorflow as tf
 import numpy as np
 import random
+import multiprocessing
 
 
 class DQNAgent:
@@ -56,30 +57,26 @@ class DQNAgent:
             act_values = [np.argmax(prediction)]
         return act_values
 
-    def replay(self, batch_size):
-        minibatch = random.sample(self.memory, batch_size)
-        loss_arr = []
-        print("Running Minibatch")
-        for i, (state, action, reward, done, n_rewards) in enumerate(minibatch):
-            print(f"\rMinibatch Iteration: {i}", end="", flush=True)
-            state[np.isnan(state)] = 0
-            state = np.expand_dims(state, axis=0)
-            predictions = self.model.predict(state, verbose=0)
-            target = sum([self.gamma**k * rew for k, rew in enumerate(n_rewards)])
+    def minibatch_process(self, minibatch):
+        state, action, reward, done, n_rewards = minibatch
+        state[np.isnan(state)] = 0
+        state = np.expand_dims(state, axis=0)
+        predictions = self.model.predict(state, verbose=0)
+        target = sum([self.gamma**k * rew for k, rew in enumerate(n_rewards)])
+        if not done:
+            target += (self.gamma**len(n_rewards)) * np.amax(predictions)
+        target_f = predictions
+        target_f[0][int(action[0])] = target
+        _loss = self.model.train_on_batch(state, target_f)
+        self.loss = _loss
+        return _loss
 
-            if not done:
-                target += (self.gamma**len(n_rewards)) * np.amax(predictions)
-
-            target_f = predictions
-            target_f[0][action] = target
-            _loss = self.model.train_on_batch(state, target_f)
-            loss_arr.append(_loss)
-            self.loss = _loss
-
+    def replay(self, i, minibatch):
+        print(f"\rMinibatch iter {i}", end="")
+        _loss = self.minibatch_process(minibatch)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
-        self.loss_avg = (self.loss_avg+(sum(loss_arr)/len(loss_arr)))/2
-        print(f"\nAverage Loss For Minibatch Iteration: {self.loss_avg}")
+        self.loss_avg = (self.loss_avg+_loss)/2
 
     def save_model(self, model_name):
     	self.model.save(model_name)
