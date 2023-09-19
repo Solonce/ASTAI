@@ -1,8 +1,13 @@
 import numpy as np
 import random
-import tensorflow as tf
 import sys
 from collections import deque
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import GRU, Dense, Dropout, Flatten
 from tensorflow.keras.optimizers import Adam
@@ -13,7 +18,6 @@ from stable_baselines3.common import logger
 from stable_baselines3.common.monitor import Monitor
 from price_grabber import get_closing_prices
 from get_price_data import get_price_data, get_top_pairs, get_ohlc_data
-import os
 from stock_trading_env import StockTradingEnv
 import json
 from dqn_agent import DQNAgent
@@ -27,8 +31,6 @@ import torch
 from collections import deque
 
 torch.set_num_threads(1)
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
 def make_env(rank, data, window_size, seed=1, current_step=0):
     env = StockTradingEnv(data, window_size, current_step=current_step)
     env.seed(seed+rank)
@@ -93,19 +95,28 @@ def write_memories(mem):
          for mem_index, memory in enumerate(memories):
              for i, _memory in enumerate(memory):
                  if type(_memory) == type(np.array([])):
-                     memory_dictionary[_][mem_index][0] = list(_memory)
-                     for entry_index, entry in enumerate(memory_dictionary[_][mem_index][0]):
-                         #print(memory_dictionary[_][mem_index][0])
-                         memory_dictionary[_][mem_index][0][entry_index] = memory_dictionary[_][mem_index][0][entry_index].tolist()
-                         #print(type(memory_dictionary[_][mem_index][0][entry_index]))
-                 elif type(_memory) == type([]) and i != 0:
+                    if i == 6:
+                         memory_dictionary[_][mem_index][6] = list(memory_dictionary[_][mem_index][6])
+                         memory_dictionary[_][mem_index][6][0] = list(memory_dictionary[_][mem_index][6][0])
+                         for j, data in enumerate(memory_dictionary[_][mem_index][6][0]):
+                             memory_dictionary[_][mem_index][6][0][j] = float(data)
+                             #print(type(memory_dictionary[_][mem_index][6][0][j]))
+                         #memory_dictionary[_][mem_index][6][0][0] = list
+                         #print(f"Overall {type(memory_dictionary[_][mem_index][6])} Base {memory_dictionary[_][mem_index][6][0]} Type {type(memory_dictionary[_][mem_index][6][0])}")
+                    if i == 0:
+                         memory_dictionary[_][mem_index][0] = list(memory_dictionary[_][mem_index][0])
+                         for entry_index, entry in enumerate(memory_dictionary[_][mem_index][0]):
+                              #print(memory_dictionary[_][mem_index][0])
+                              memory_dictionary[_][mem_index][0][entry_index] = list(memory_dictionary[_][mem_index][0][entry_index])
+                              #print(type(memory_dictionary[_][mem_index][0][entry_index]))
+
+                 elif type(_memory) == type([]) and i != 0 and i != 6:
                      for entry_index, entry in enumerate(memory_dictionary[_][mem_index][i]):
                          #print(entry, i, type(entry))
                          memory_dictionary[_][mem_index][i][entry_index] = float(_memory[entry_index])
-
      with open("memory.json", "w") as outfile:
         json.dump(memory_dictionary, outfile, indent = 4)
-     print("\nMemory written to JSON.")
+     print("Memory written to JSON.")
 
 def read_memories():
      f = open('memory.json')
@@ -116,6 +127,9 @@ def read_memories():
              for i, _memory in enumerate(memory):
                  memory_dictionary[_][mem_index][0] = np.array(memory_dictionary[_][mem_index][0])
                  memory_dictionary[_][mem_index][2] = [np.float64(memory_dictionary[_][mem_index][2])]
+                 if type(_memory) == type([]) and i == 6:
+                     memory_dictionary[_][mem_index][6] = np.array(memory_dictionary[_][mem_index][6])
+                     memory_dictionary[_][mem_index][6][0] = np.array(memory_dictionary[_][mem_index][6][0])
                  if type(memory_dictionary[_][mem_index][i]) == type([]):
                      for entry_index, entry in enumerate(memory_dictionary[_][mem_index][i]):
                          if i == 0:
@@ -175,18 +189,21 @@ if __name__ == "__main__":
 
         for e in range(episode_start, episodes):
             state = envs.reset()
+            print(pair)
             for time in range(1000):
                 gc.collect()
-                state = np.array(state[time:window_size+(time)])
-                action = agent.act(state)
+                state = np.array(state[(envs.current_step):window_size+(envs.current_step)])
+                action, predictions = agent.act(state)
                 next_state, reward, done, _, info = envs.step(action)
-                agent.remember(state, action, reward, done, info['n_rewards'])
+                agent.remember(state, action, reward, done, info['n_rewards'], envs.get_best_reward(), predictions)
                 state = next_state
                 agent.step = info['step']
                 agent.current_pair = i
                 print(f"time_step: {time}, episode: {e}/{episodes}, action: {action}, reward: {np.round(reward, 2)}, net reward: {np.round(info['net reward'], 2)} score: {agent.step}, e: {agent.epsilon}, done: {done}, open orders: {info['orders']}")
-                if done is True or agent.step>=(len(stock_price_data_np)-window_size):
-                    update_iteration_data({"episode": str(e), "step": 0, "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate": str(agent.learning_rate)})
+                print(done)
+                if done is True or envs.current_step>=(len(stock_price_data_np)-window_size):
+                    print("DONE")
+                    update_iteration_data({"episode": str(e+1), "step": 0, "current_pair": agent.current_iter, "Net Rewards": info['net reward'], "loss": str(agent.loss), "loss_avg": str(agent.loss_avg), "epsilon": str(agent.epsilon), "learning_rate": str(agent.learning_rate)})
                     kill_size = kill_size - time
                     break
                 else:
@@ -194,18 +211,19 @@ if __name__ == "__main__":
 
                 if len(agent.memory) > batch_size:
                     minibatch = random.sample(agent.memory, batch_size)
-                    for i, mini in enumerate(minibatch):
-                        agent.replay(i, mini)
+                    agent.replay(minibatch)
 
                 agent.save_model(model_name)
                 write_memories([list(memory) for memory in agent.memory])
                 if time >= kill_size:
                     quit()
-
+        episode_start = 0
         agent.current_iter += 1
+        agent.learning_rate = agent.learning_rate * agent.learning_rate_decay
 
     f = open('iteration_data.json')
     data = json.load(f)
+    data['episode'] = 0
     data['step'] = 0
     data['current_pair'] = 0
 

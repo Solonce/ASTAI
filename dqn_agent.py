@@ -7,7 +7,10 @@ import tensorflow as tf
 import numpy as np
 import random
 import multiprocessing
+import time
+import os
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 class DQNAgent:
     def __init__(self, action_size, window_size, is_model=False, current_iter = 0, current_step=0, model_name="", loss=0, epsilon=1.0, learning_rate=0.001):
@@ -29,6 +32,16 @@ class DQNAgent:
         else:
             self._load_model(model_name)
 
+    def timer_decorator(func):
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            result = func(*args, **kwargs)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print(f"\nFunction '{func.__name__}' took {elapsed_time} seconds to complete")
+            return result
+        return wrapper
+
     def _load_model(self, model_name):
         self.model = load_model(model_name)
         self.model.compile(optimizer=Adam(learning_rate=self.learning_rate, clipnorm=1.0), loss='mse', run_eagerly=True)
@@ -45,38 +58,54 @@ class DQNAgent:
         model.compile(optimizer=Adam(learning_rate=self.learning_rate, clipnorm=1.0), loss='mse', run_eagerly=True)
         return model
 
-    def remember(self, state, action, reward, done, n_rewards):
-        self.memory.append((state, action, reward, done, n_rewards))
+    def remember(self, state, action, reward, done, n_rewards, best_reward, prediction):
+        self.memory.append((state, action, reward, done, n_rewards, best_reward, prediction))
 
     def act(self, state, prediction=False):
         state = state.reshape(1, 50, 5)
+        predictions = 0
         if np.random.rand() <= self.epsilon and prediction==False:
-            act_values = [random.randrange(self.action_size)]
+            action = random.randrange(self.action_size)
+            act_values = [action]
         else:
-            prediction = self.model.predict(state, verbose=0)
-            act_values = [np.argmax(prediction)]
-        return act_values
+            predictions = self.model.predict(state, verbose=0)
+            #print(f"Type {type(predictions[0])} Prediction {predictions[0]}")
+            act_values = [np.argmax(predictions)]
+        return act_values, predictions
 
     def minibatch_process(self, minibatch):
-        state, action, reward, done, n_rewards = minibatch
+        state, action, reward, done, n_rewards, best_reward, predictions = minibatch
+        #print(f"State Shape: {np.shape(state)}")
         state[np.isnan(state)] = 0
         state = np.expand_dims(state, axis=0)
-        predictions = self.model.predict(state, verbose=0)
-        target = sum([self.gamma**k * rew for k, rew in enumerate(n_rewards)])
-        if not done:
-            target += (self.gamma**len(n_rewards)) * np.amax(predictions)
+        if type(predictions) == type(0):
+            predictions = self.model.predict(state, verbose=0)
         target_f = predictions
+        #target = sum([self.gamma**k * rew for k, rew in enumerate(n_rewards)])
+        #print(f"\nBest Action: {type(best_reward)} Target: {target_f} Target Type: {type(target_f)}")
+        target = np.amax(predictions)
+        if not done:
+            discounted_rewards = sum([self.gamma**i * n_rewards[i] for i in range(len(n_rewards))])
+            q_val_n_step = self.gamma**len(n_rewards) * np.amax(predictions)
+            target = discounted_rewards + q_val_n_step
+            #print(f"--------Target_f {target_f} Action: {action[0]} Target: {target}")
         target_f[0][int(action[0])] = target
+        #print(f"New Prediction Target: {target_f} Best Reward {best_reward}")
+        #print(f"Shape: {np.shape(state)}")
         _loss = self.model.train_on_batch(state, target_f)
         self.loss = _loss
         return _loss
 
-    def replay(self, i, minibatch):
-        print(f"\rMinibatch iter {i}", end="")
-        _loss = self.minibatch_process(minibatch)
-        if self.epsilon > self.epsilon_min:
+    @timer_decorator
+    def replay(self, minibatch):
+        loss_arr = []
+        for i, mini in enumerate(minibatch):
+            print(f"\rMinibatch iter {i}", end="")
+            _loss = self.minibatch_process(mini)
+            loss_arr.append(_loss)
+        self.loss_avg = (self.loss_avg+(sum(loss_arr)/len(loss_arr)))/2
+        if self.epsilon >  self.epsilon_min:
             self.epsilon *= self.epsilon_decay
-        self.loss_avg = (self.loss_avg+_loss)/2
 
     def save_model(self, model_name):
     	self.model.save(model_name)

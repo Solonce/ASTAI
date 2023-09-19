@@ -14,7 +14,7 @@ def get_price_data(get_index=False, num=10000000000):
         url = "https://api.kraken.com/0/public/OHLC"
         payload = {
             "pair": pair,
-            "interval": 60  # 1-minute intervals
+            "interval": 5  # 1-minute intervals
         }
         response = requests.get(url, params=payload)
         return pd.DataFrame(response.json()['result'][pair], 
